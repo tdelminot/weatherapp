@@ -6,9 +6,40 @@
 
 body {
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
- background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
     min-height: 100vh;
     padding: 20px;
+    transition: background 0.5s ease;
+}
+
+/* Backgrounds selon météo */
+body.sunny {
+    background: linear-gradient(135deg, #f5af19 0%, #f12711 100%);
+}
+
+body.clouds {
+    background: linear-gradient(135deg, #757F9A 0%, #D7DDE8 100%);
+}
+
+body.rain {
+    background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+}
+
+body.snow {
+    background: linear-gradient(135deg, #e6e9f0 0%, #eef1f5 100%);
+}
+
+body.default, body.clear {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Animation d'icône météo */
+.weather-icon {
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
 }
 
 .container {

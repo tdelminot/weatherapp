@@ -59,16 +59,41 @@ function renderFavorites() {
     container.appendChild(fragment);
 }
 
+// change background based on weather condition
+function updateWeatherBackground(condition) {
+    const body = document.body;
+    // remove all weather classes
+    body.className = '';
+    
+    const conditionLower = condition.toLowerCase();
+    
+    if (conditionLower.includes('clear') || conditionLower.includes('sunny')) {
+        body.classList.add('sunny');
+    } else if (conditionLower.includes('cloud')) {
+        body.classList.add('clouds');
+    } else if (conditionLower.includes('rain') || conditionLower.includes('drizzle')) {
+        body.classList.add('rain');
+    } else if (conditionLower.includes('snow')) {
+        body.classList.add('snow');
+    } else {
+        body.classList.add('default');
+    }
+}
+
+
 // display weather data in UI
 function displayWeather(data) {
     const container = document.getElementById('weatherResult');
+    
+    // change background based on weather
+    updateWeatherBackground(data.weather[0].main);
     
     const html = `
         <div class="weather-card">
             <h2>${data.name}, ${data.sys.country}</h2>
             <div class="weather-temp">${Math.round(data.main.temp)}°C</div>
             <div class="weather-condition">
-                <img src="https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png" alt="">
+                <img class="weather-icon" src="https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png" alt="">
                 ${data.weather[0].description}
             </div>
             <div class="weather-details">
