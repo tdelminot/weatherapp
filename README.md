@@ -1,21 +1,46 @@
-# WeatherApp
+# WeatherApp - Sécured version 🔒
 
-Simple weather app using OpenWeatherMap API.
+## 🌤️   Application météo avec sécurité renforcée
 
-## Features
-- Search weather by city name
-- Save favorite cities (localStorage)
-- Real-time data from OpenWeatherMap
+### Fonctionnalités
 
-## Tech Stack
+-   Météo en temps réel via **wttr.in** (sans clé API)
+-   **Content Security Policy (CSP)** contre XSS
+-   **Validation des entrées** utilisateur
+-   **Rate Limiting** (2s entre requêtes, max 10/min)
+-   **Cache localStorage** (5 minutes)
+-   **Favoris** sauvegardés localement
+-   **Performance monitoring** intégré
+-   **Animations GPU-accélérées**
+
+### Sécurité implémentée
+
+| Protection | Statut |
+|------------|--------|
+| Clé API exposée | ✅ Éliminé (wttr.in) |
+| XSS Protection | ✅ CSP + Sanitize HTML |
+| Validation entrées | ✅ Regex + Longueur |
+| Rate Limiting | ✅ Côté client |
+| Cache | ✅ Réduit les appels |
+| HTTPS | ✅ GitHub Pages |
+
+### Démo
+
+[Lien vers la démo](https://tdelminot.github.io/weatherapp)
+
+### Technologies
+
 - Vanilla JavaScript
 - HTML5 / CSS3
-- OpenWeatherMap API
+- wttr.in API
+- localStorage
+- Performance API
 
-## Live Demo
-https://tdelminot.github.io/weatherapp
+### Installation
 
-## Run Locally
-1. Clone repo
-2. Open index.html in browser
-3. Or use local server
+```bash
+git clone https://github.com/tdelminot/weatherapp.git
+cd weatherapp
+# Ouvrir index.html dans le navigateur
+Sécurité
+Cette application est conçue pour être déployée sur GitHub Pages sans exposer de clé API. Toutes les mesures de sécurité sont implémentées côté client.
