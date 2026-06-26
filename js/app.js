@@ -2,26 +2,24 @@
 // WeatherApp - Version Sécurisée (wttr.in + Proxy CORS)
  
 //  API publique sans clé (wttr.in)
-//   Proxy CORS pour GitHub Pages
+//  Proxy CORS pour GitHub Pages
+//  Fallback direct + proxy
 //   CSP protection
-//   Validation entrées
+//  Validation entrées
 //   Rate limiting
-//  Cache localStorage
-//   Performance monitoring
-// ============================================
+//   Cache localStorage
+//  Performance monitoring
+ 
 
 // Configuration
-//   Utilisation d'un proxy CORS  
 const PROXY = 'https://api.allorigins.win/raw?url=';
 const WTTR_URL = 'https://wttr.in';
-
  
-// SÉCURITÉ : Rate Limiting
- 
+// SÉCURITÉ : Rate Limiting 
 
 const rateLimiter = {
     lastCall: 0,
-    minInterval: 1000, // 1 seconde (raisonnable)
+    minInterval: 1000, // 1 seconde
     maxCallsPerMinute: 20, // 20 appels par minute
     callHistory: [],
     isBlocked: false,
@@ -47,12 +45,14 @@ const rateLimiter = {
         // Nettoyer l'historique (garder 1 minute)
         this.callHistory = this.callHistory.filter(time => now - time < 60000);
         
-        // Vérifier le nombre d'appels dans la dernière minute
-        if (this.callHistory.length >= this.maxCallsPerMinute) {
-            // Bloquer pour 30 secondes
+        //   Adapter le rate limiting selon la taille du cache
+        const cacheSize = weatherCache ? weatherCache.cache.size : 0;
+        const adjustedLimit = cacheSize > 3 ? this.maxCallsPerMinute + 10 : this.maxCallsPerMinute;
+        
+        if (this.callHistory.length >= adjustedLimit) {
             this.isBlocked = true;
             this.blockUntil = now + 30000;
-            console.warn('⚠️ Rate limit exceeded - bloqué 30s');
+            console.warn(`⚠️ Rate limit exceeded (${adjustedLimit}/min) - bloqué 30s`);
             return false;
         }
         
@@ -67,7 +67,6 @@ const rateLimiter = {
         return true;
     },
     
-    // Méthode pour réinitialiser manuellement
     reset() {
         this.lastCall = 0;
         this.callHistory = [];
@@ -76,36 +75,26 @@ const rateLimiter = {
         console.log('🔄 Rate limiter réinitialisé');
     }
 };
-
  
-// SÉCURITÉ : Validation des entrées
- 
+// SÉCURITÉ : Validation des entrées 
 
 function sanitizeInput(input) {
     if (!input || typeof input !== 'string') {
         return '';
     }
     
-    // Nettoyage
     let clean = input.trim();
-    
-    // Supprimer les caractères dangereux
     clean = clean.replace(/[<>{}[\]/\\;'"()&$#%@!=+`~|]/g, '');
-    
-    // Limiter la longueur
     clean = clean.slice(0, 50);
     
-    // Vérifier qu'il reste quelque chose
     if (clean.length < 2) {
         throw new Error('Le nom de la ville doit contenir au moins 2 caractères');
     }
     
     return clean;
 }
-
  
-// SÉCURITÉ : XSS Protection (Sanitize HTML)
- 
+// SÉCURITÉ : XSS Protection (Sanitize HTML) 
 
 function sanitizeHTML(str) {
     if (!str) return '';
@@ -113,10 +102,8 @@ function sanitizeHTML(str) {
     div.textContent = str;
     return div.innerHTML;
 }
-
  
-// CACHE : localStorage pour réduire les appels
- 
+// CACHE : localStorage pour réduire les appels 
 
 class WeatherCache {
     constructor() {
@@ -170,10 +157,8 @@ class WeatherCache {
 }
 
 const weatherCache = new WeatherCache();
-
  
-// PERFORMANCE : Mesure du temps d'exécution
- 
+// PERFORMANCE : Mesure du temps d'exécution 
 
 function measurePerformance(fn, label) {
     const start = performance.now();
@@ -182,10 +167,8 @@ function measurePerformance(fn, label) {
     console.log(`⏱️ ${label}: ${(end - start).toFixed(2)}ms`);
     return result;
 }
-
  
-// STORAGE LOCAL : Favoris
- 
+// STORAGE LOCAL : Favoris 
 
 let favorites = [];
 
@@ -218,15 +201,12 @@ function removeFavorite(city) {
     renderFavorites();
     console.log(`🗑️ Ville retirée des favoris: ${city}`);
 }
-
  
-// RENDU OPTIMISÉ
- 
+// RENDU OPTIMISÉ 
 
 function renderFavorites() {
     const container = document.getElementById('favoritesList');
     
-    // Vérification
     if (!container) {
         console.error('❌ favoritesList element not found');
         return;
@@ -266,22 +246,22 @@ function renderFavorites() {
     container.innerHTML = '';
     container.appendChild(fragment);
 }
-
  
-// API CALL : wttr.in via proxy CORS 
- 
+// API CALL : wttr.in avec fallback 
 
 async function fetchWeather(city) {
-    // Nettoyer et valider la ville
     const cleanCity = sanitizeInput(city);
     
-    // Vérifier le cache
+    //  1. Vérifier le cache D'ABORD
     const cached = weatherCache.get(cleanCity);
     if (cached) {
+        console.log(`📦 Cache hit pour "${cleanCity}" - Pas d'appel API`);
         return cached;
     }
     
-    // Vérifier le rate limiting
+    console.log(`🌐 Cache miss pour "${cleanCity}" - Appel API nécessaire`);
+    
+    //   2. Vérifier le rate limiting
     if (!rateLimiter.canCall()) {
         const now = Date.now();
         if (rateLimiter.isBlocked) {
@@ -291,16 +271,37 @@ async function fetchWeather(city) {
         throw new Error('Trop de requêtes. Veuillez attendre quelques secondes.');
     }
     
-    //   URL avec proxy CORS (CORRECTION PRINCIPALE)
-    const url = `${PROXY}${encodeURIComponent(`${WTTR_URL}/${encodeURIComponent(cleanCity)}?format=j1&lang=fr`)}`;
-    
     console.time(`🌤️ API call for ${cleanCity}`);
-    const startPerf = performance.now();
     
+    //   3. Essayer d'abord en direct (plus rapide, moins de dépendances)
     try {
-        const response = await fetch(url);
+        console.log('🔄 Tentative appel direct...');
+        const directUrl = `${WTTR_URL}/${encodeURIComponent(cleanCity)}?format=j1&lang=fr`;
         
-        //   gestion des erreurs
+        const response = await fetch(directUrl);
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.current_condition) {
+                const weatherData = transformWeatherData(data, cleanCity);
+                weatherCache.set(cleanCity, weatherData);
+                console.log('✅ Appel direct réussi !');
+                console.timeEnd(`🌤️ API call for ${cleanCity}`);
+                return weatherData;
+            }
+        }
+        console.log('⚠️ Appel direct échoué, essai proxy...');
+    } catch (directError) {
+        console.log('⚠️ Appel direct échoué:', directError.message);
+    }
+    
+    //   4. Fallback: via proxy CORS
+    try {
+        console.log('🔄 Tentative proxy CORS...');
+        const proxyUrl = `${PROXY}${encodeURIComponent(`${WTTR_URL}/${encodeURIComponent(cleanCity)}?format=j1&lang=fr`)}`;
+        
+        const response = await fetch(proxyUrl);
+        
         if (response.status === 404) {
             throw new Error(`Ville "${cleanCity}" non trouvée. Vérifiez le nom.`);
         }
@@ -310,31 +311,26 @@ async function fetchWeather(city) {
         
         const data = await response.json();
         
-        // Vérifier que les données sont valides
         if (!data || !data.current_condition) {
             throw new Error('Données météo invalides');
         }
         
-        // Transformer les données
         const weatherData = transformWeatherData(data, cleanCity);
-        
-        const endPerf = performance.now();
-        console.log(`📊 Temps de réponse API: ${(endPerf - startPerf).toFixed(2)}ms`);
-        console.timeEnd(`🌤️ API call for ${cleanCity}`);
-        
-        // Mettre en cache
         weatherCache.set(cleanCity, weatherData);
+        console.log('✅ Proxy CORS réussi !');
+        console.timeEnd(`🌤️ API call for ${cleanCity}`);
         
         return weatherData;
-    } catch (error) {
-        console.error(`❌ Erreur API: ${error.message}`);
+    } catch (proxyError) {
+        console.error(`❌ Erreur proxy: ${proxyError.message}`);
         console.timeEnd(`🌤️ API call for ${cleanCity}`);
-        throw error;
+        throw new Error(`Service météo indisponible. Veuillez réessayer. (${proxyError.message})`);
     }
 }
+ 
+// TRANSFORMATION DES DONNÉES 
 
 function transformWeatherData(data, cityName) {
-    // Gérer les cas où les données sont manquantes
     const current = data.current_condition?.[0] || {};
     const nearest = data.nearest_area?.[0] || {};
     
@@ -357,15 +353,12 @@ function transformWeatherData(data, cityName) {
         }
     };
 }
-
  
-// AFFICHAGE OPTIMISÉ
- 
+// AFFICHAGE OPTIMISÉ 
 
 function displayWeather(data) {
     const container = document.getElementById('weatherResult');
     
-    // Vérification
     if (!container) {
         console.error('❌ weatherResult element not found');
         return;
@@ -411,11 +404,12 @@ function displayWeather(data) {
     
     displayPerformanceInfo();
 }
+ 
+// PERFORMANCE INFO 
 
 function displayPerformanceInfo() {
     const perfDiv = document.getElementById('performanceInfo');
     
-    // Vérification pour éviter erreur
     if (!perfDiv) {
         console.log('ℹ️ performanceInfo element not found, skipping display');
         return;
@@ -438,11 +432,12 @@ function displayPerformanceInfo() {
         perfDiv.innerHTML = '📊 Performance API non disponible';
     }
 }
+ 
+// AFFICHAGE ERREUR 
 
 function showError(message) {
     const container = document.getElementById('weatherResult');
     
-    // Vérification
     if (!container) {
         console.error('❌ weatherResult element not found');
         return;
@@ -454,16 +449,13 @@ function showError(message) {
         </div>
     `;
 }
-
  
-// FONCTION PRINCIPALE
- 
+// FONCTION PRINCIPALE 
 
 async function searchWeather() {
     const cityInput = document.getElementById('cityInput');
     let city;
     
-    // Vérification
     if (!cityInput) {
         console.error('❌ cityInput element not found');
         return;
@@ -478,7 +470,6 @@ async function searchWeather() {
     
     const container = document.getElementById('weatherResult');
     
-    // Vérification
     if (!container) {
         console.error('❌ weatherResult element not found');
         return;
@@ -493,16 +484,14 @@ async function searchWeather() {
         showError(`Impossible de trouver la météo pour "${sanitizeHTML(city)}". ${error.message}`);
     }
 }
-
  
-// INITIALISATION
- 
+// INITIALISATION 
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 WeatherApp sécurisé démarré');
     console.log('🔒 Mode: wttr.in (sans clé API)');
     console.log('🛡️ Sécurité: Rate limiting + XSS protection + Validation');
-    console.log('🌐 Proxy CORS: allorigins.win');
+    console.log('🌐 Proxy CORS: allorigins.win + Fallback direct');
     
     // Vérification des éléments HTML
     const requiredElements = ['cityInput', 'searchBtn', 'favoritesList', 'weatherResult'];
@@ -531,7 +520,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('❌ Éléments de recherche manquants');
     }
     
-    // Appeler displayPerformanceInfo au démarrage
     displayPerformanceInfo();
     
     console.log('✅ Application prête');
